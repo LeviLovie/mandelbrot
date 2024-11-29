@@ -1,0 +1,8 @@
+[package]
+name = "mandelbrot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+raylib = "5.0.2"
+num-complex = "0.4.6"
