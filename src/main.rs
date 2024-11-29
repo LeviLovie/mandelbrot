@@ -4,7 +4,7 @@ use raylib::prelude::*;
 pub const WIDTH: i32 = 800;
 pub const HEIGHT: i32 = 600;
 pub const TITLE: &str = "Mandelbrot Set";
-pub const MAX_ITER: i32 = 64;
+pub const MAX_ITER: i32 = 128;
 pub type Pixels = Vec<u8>;
 
 fn mandelbrot(c: Complex<f64>) -> f64 {
@@ -78,94 +78,131 @@ fn main() {
     let mut width = WIDTH;
     let mut height = HEIGHT;
     let mut zoom = 1.0;
-    let mut center = Complex::new(-0.5, 0.0);
+    let mut center = Complex::new(-1.25, 0.0);
 
-    let mut texture = rl
-        .load_render_texture(&thread, width as u32, height as u32)
-        .expect("Failed to load render texture");
+    let mut shader = rl
+        .load_shader(
+            &thread,
+            None,
+            Some("mandelbrot.fs"),
+        )
+        .expect("Failed to load shader");
 
     let mut pixels = Pixels::new();
 
     while !rl.window_should_close() {
-        if rl.is_window_resized() {
-            width = rl.get_screen_width();
-            height = rl.get_screen_height();
-            changed = true;
-        }
+        let screen_width = rl.get_screen_width() as f32;
+        let screen_height = rl.get_screen_height() as f32;
 
-        if rl.is_key_pressed(raylib::consts::KeyboardKey::KEY_R) {
-            rerender = true;
-        }
+        // Update the shader with the dynamic viewport size to variable "viewportSize"
+        // uniform float zoom;
+        // uniform float screen_width;
+        // uniform float screen_height;
+        // uniform float center_x;
+        // uniform float center_y;
+        // uniform int itr;
+        shader.set_shader_value(shader.get_shader_location("zoom"), zoom);
+        shader.set_shader_value(shader.get_shader_location("screen_width"), screen_width);
+        shader.set_shader_value(shader.get_shader_location("screen_height"), screen_height);
+        shader.set_shader_value(shader.get_shader_location("center_x"), center.re);
+        shader.set_shader_value(shader.get_shader_location("center_y"), center.im);
+        shader.set_shader_value(shader.get_shader_location("itr"), MAX_ITER);
 
-        let mouse_position = rl.get_mouse_position();
-        if rl.is_mouse_button_pressed(raylib::consts::MouseButton::MOUSE_BUTTON_LEFT) {
-            let x = mouse_position.x as f64;
-            let y = mouse_position.y as f64;
-            let scale_x = 3.0 / zoom;
-            let scale_y = 2.0 / zoom;
-            let cx = scale_x * (x - width as f64 / 2.0) / (width as f64) + center.re;
-            let cy = scale_y * (y - height as f64 / 2.0) / (height as f64) + center.im;
-            center = Complex::new(cx, cy);
-            zoom *= 2.0;
-            changed = true;
-            rerender = true;
-        } else if rl.is_mouse_button_pressed(raylib::consts::MouseButton::MOUSE_BUTTON_RIGHT) {
-            let x = mouse_position.x as f64;
-            let y = mouse_position.y as f64;
-            let scale_x = 3.0 / zoom;
-            let scale_y = 2.0 / zoom;
-            let cx = scale_x * (x - width as f64 / 2.0) / (width as f64) + center.re;
-            let cy = scale_y * (y - height as f64 / 2.0) / (height as f64) + center.im;
-            center = Complex::new(cx, cy);
-            zoom /= 2.0;
-            changed = true;
-            rerender = true;
-        }
+        zoom += 5.0 * rl.get_frame_time();
 
-        if rerender {
-            texture = rl
-                .load_render_texture(&thread, width as u32, height as u32)
-                .expect("Failed to load render texture");
-        }
-
+        // Begin drawing with the shader applied
         let mut d = rl.begin_drawing(&thread);
+        d.clear_background(Color::BLACK);
 
-        if rerender {
-            println!("Rendering Mandelbrot Set...");
-            let mut d = d.begin_texture_mode(&thread, &mut texture);
-            render_mandelbrot(&mut pixels, width, height, zoom, center);
-            draw_mandelbrot(&pixels, &mut d, width, height);
-            println!("Mandelbrot Set rendered!");
-            changed = false;
-            rerender = false;
+        // Use the shader to draw the full-screen quad
+        {
+            let mut d = d.begin_shader_mode(&shader);
+            d.draw_rectangle(0, 0, screen_width as i32, screen_height as i32, Color::WHITE);
         }
 
-        d.clear_background(Color::WHITE);
-        d.draw_texture_pro(
-            &texture,
-            Rectangle::new(0.0, 0.0, texture.width() as f32, -texture.height() as f32),
-            Rectangle::new(0.0, 0.0, width as f32, height as f32),
-            Vector2::new(0.0, 0.0),
-            0.0,
-            Color::WHITE,
-        );
+        // if rl.is_window_resized() {
+        //     width = rl.get_screen_width();
+        //     height = rl.get_screen_height();
+        //     changed = true;
+        // }
+        //
+        // if rl.is_key_pressed(raylib::consts::KeyboardKey::KEY_R) {
+        //     rerender = true;
+        // }
+        //
+        // let mouse_position = rl.get_mouse_position();
+        // if rl.is_mouse_button_pressed(raylib::consts::MouseButton::MOUSE_BUTTON_LEFT) {
+        //     let x = mouse_position.x as f64;
+        //     let y = mouse_position.y as f64;
+        //     let scale_x = 3.0 / zoom;
+        //     let scale_y = 2.0 / zoom;
+        //     let cx = scale_x * (x - width as f64 / 2.0) / (width as f64) + center.re;
+        //     let cy = scale_y * (y - height as f64 / 2.0) / (height as f64) + center.im;
+        //     center = Complex::new(cx, cy);
+        //     zoom *= 2.0;
+        //     changed = true;
+        //     rerender = true;
+        // } else if rl.is_mouse_button_pressed(raylib::consts::MouseButton::MOUSE_BUTTON_RIGHT) {
+        //     let x = mouse_position.x as f64;
+        //     let y = mouse_position.y as f64;
+        //     let scale_x = 3.0 / zoom;
+        //     let scale_y = 2.0 / zoom;
+        //     let cx = scale_x * (x - width as f64 / 2.0) / (width as f64) + center.re;
+        //     let cy = scale_y * (y - height as f64 / 2.0) / (height as f64) + center.im;
+        //     center = Complex::new(cx, cy);
+        //     zoom /= 2.0;
+        //     changed = true;
+        //     rerender = true;
+        // }
+        //
+        // if rerender {
+        //     texture = rl
+        //         .load_render_texture(&thread, width as u32, height as u32)
+        //         .expect("Failed to load render texture");
+        // }
+        //
+        // let mut d = rl.begin_drawing(&thread);
+        //
+        // if rerender {
+        //     println!("Rendering Mandelbrot Set...");
+        //     let mut d = d.begin_texture_mode(&thread, &mut texture);
+        //     render_mandelbrot(&mut pixels, width, height, zoom, center);
+        //     draw_mandelbrot(&pixels, &mut d, width, height);
+        //     println!("Mandelbrot Set rendered!");
+        //     changed = false;
+        //     rerender = false;
+        // }
 
-        d.draw_rectangle_lines(
-            mouse_position.x as i32 - width / 4,
-            mouse_position.y as i32 - height / 4,
-            width / 2,
-            height / 2,
-            Color::RED,
-        );
+        // d.clear_background(Color::WHITE);
+        // // Apply the shader to the texture
+        // let mut d = d.begin_shader_mode(&shader);
 
-        if changed {
-            d.draw_text(
-                "Press 'R' to rerender the Mandelbrot Set",
-                10,
-                10,
-                20,
-                Color::BLACK,
-            );
-        }
+
+        // d.draw_texture_pro(
+        //     &texture,
+        //     Rectangle::new(0.0, 0.0, texture.width() as f32, -texture.height() as f32),
+        //     Rectangle::new(0.0, 0.0, width as f32, height as f32),
+        //     Vector2::new(0.0, 0.0),
+        //     0.0,
+        //     Color::WHITE,
+        // );
+        //
+        // d.draw_rectangle_lines(
+        //     mouse_position.x as i32 - width / 4,
+        //     mouse_position.y as i32 - height / 4,
+        //     width / 2,
+        //     height / 2,
+        //     Color::RED,
+        // );
+        //
+        // if changed {
+        //     d.draw_text(
+        //         "Press 'R' to rerender the Mandelbrot Set",
+        //         10,
+        //         10,
+        //         20,
+        //         Color::BLACK,
+        //     );
+        // }
     }
 }
